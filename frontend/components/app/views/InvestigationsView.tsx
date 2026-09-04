@@ -128,14 +128,9 @@ export default function InvestigationsView({
     ]);
   };
 
-  const handleAnalyzeFootage = async () => {
-    setIsAnalyzing(true);
-    // Simulate pipeline trigger
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsAnalyzing(false);
+  const handleAnalyzeFootage = () => {
     setShowModal(false);
     onLoadDemo();
-    onNavigateTab("analysis");
   };
 
   return (

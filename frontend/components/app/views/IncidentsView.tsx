@@ -179,9 +179,32 @@ export default function IncidentsView({
           </div>
         </div>
 
-        {/* Right Column: Inferences, Uncertainties & Confidence */}
+        {/* Right Column: Observed Facts, Inferences, Uncertainties & Confidence */}
         <div className="space-y-6">
-          {/* Inferences vs Facts */}
+          {/* Observed Facts */}
+          <div className="p-5 rounded-xl border border-neutral-800 bg-neutral-900/60 backdrop-blur-md space-y-4">
+            <h4 className="text-sm font-mono font-bold text-white uppercase tracking-wider flex items-center justify-between border-b border-neutral-800 pb-3">
+              <span>Observed Facts</span>
+              <span className="text-xs text-emerald-400 font-mono">Verified Visual Ground Truth</span>
+            </h4>
+
+            <div className="space-y-2 font-mono text-xs">
+              {report.observedFacts.map((fact) => (
+                <div
+                  key={fact.id}
+                  className="p-3 rounded-lg bg-neutral-950/60 border border-neutral-800 space-y-1"
+                >
+                  <div className="flex justify-between text-neutral-500 text-[10px]">
+                    <span className="text-amber-400 font-bold">{fact.timestamp}</span>
+                    <span>{fact.cameraLabel.split("—")[0].trim()}</span>
+                  </div>
+                  <div className="text-neutral-200 font-sans text-xs">{fact.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* AI Inferences vs Facts */}
           <div className="p-5 rounded-xl border border-neutral-800 bg-neutral-900/60 backdrop-blur-md space-y-4">
             <h4 className="text-sm font-mono font-bold text-white uppercase tracking-wider flex items-center justify-between border-b border-neutral-800 pb-3">
               <span>AI Causal Inferences</span>

@@ -14,6 +14,7 @@ import IncidentsView from "./views/IncidentsView";
 import EvidenceView from "./views/EvidenceView";
 import ReportsView from "./views/ReportsView";
 import SettingsView from "./views/SettingsView";
+import PipelineProcessingModal from "./PipelineProcessingModal";
 
 export default function AppShell() {
   const [activeTab, setActiveTab] = useState<AppTab>("dashboard");
@@ -22,6 +23,7 @@ export default function AppShell() {
   const [seekTargetMs, setSeekTargetMs] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState<string>("");
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+  const [isProcessingModalOpen, setIsProcessingModalOpen] = useState<boolean>(false);
 
   // UTC clock ticker
   useEffect(() => {
@@ -43,7 +45,12 @@ export default function AppShell() {
     setActiveTab(tab);
   };
 
-  const handleLoadDemo = () => {
+  const handleTriggerAnalysis = () => {
+    setIsProcessingModalOpen(true);
+  };
+
+  const handlePipelineComplete = () => {
+    setIsProcessingModalOpen(false);
     setActiveInvestigation(MOCK_INVESTIGATION);
     setActiveTab("analysis");
   };
@@ -159,7 +166,7 @@ export default function AppShell() {
         {isSidebarOpen && (
           <div className="p-3 border-t border-neutral-800 bg-neutral-900/30">
             <button
-              onClick={handleLoadDemo}
+              onClick={handleTriggerAnalysis}
               className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-500/10 border border-amber-500/30 hover:border-amber-500 text-amber-400 font-mono font-semibold text-xs flex items-center justify-center gap-2 transition-all"
             >
               <span>⚡</span>
@@ -204,7 +211,7 @@ export default function AppShell() {
             {/* Quick Action Buttons */}
             <div className="flex items-center gap-2">
               <button
-                onClick={handleLoadDemo}
+                onClick={handleTriggerAnalysis}
                 className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold font-mono text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(245,158,11,0.25)]"
               >
                 <span>⚡</span>
@@ -236,7 +243,7 @@ export default function AppShell() {
                 <DashboardView
                   investigation={activeInvestigation}
                   onNavigateTab={handleNavigateTab}
-                  onLoadDemo={handleLoadDemo}
+                  onLoadDemo={handleTriggerAnalysis}
                   investigationsList={investigationsList}
                   onSelectInvestigation={setActiveInvestigation}
                 />
@@ -248,7 +255,7 @@ export default function AppShell() {
                   activeInvestigation={activeInvestigation}
                   onSelectInvestigation={setActiveInvestigation}
                   onNavigateTab={handleNavigateTab}
-                  onLoadDemo={handleLoadDemo}
+                  onLoadDemo={handleTriggerAnalysis}
                   onCreateInvestigation={handleCreateInvestigation}
                 />
               )}
@@ -289,6 +296,13 @@ export default function AppShell() {
           </AnimatePresence>
         </main>
       </div>
+
+      {/* Realistic Analysis Processing Sequence Modal */}
+      <PipelineProcessingModal
+        isOpen={isProcessingModalOpen}
+        onComplete={handlePipelineComplete}
+      />
     </div>
   );
 }
+

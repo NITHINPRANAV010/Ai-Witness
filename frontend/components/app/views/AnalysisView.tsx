@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type {
   Investigation,
   IncidentEvent,
   ChatMessage,
   EvidenceReference,
-  CameraFrameDetection,
 } from "@/lib/types";
 import {
   MOCK_EVENTS,
@@ -35,7 +34,8 @@ export default function AnalysisView({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [activeCamId, setActiveCamId] = useState<string>("cam-01");
   const [selectedEventId, setSelectedEventId] = useState<string>("evt-01");
-  const [activeSubTab, setActiveSubTab] = useState<"timeline" | "correlation">("timeline");
+  const [activeSubTab, setActiveSubTab] = useState<"timeline" | "correlation" | "reconstruction">("timeline");
+  const [showCorrelationOverlay, setShowCorrelationOverlay] = useState<boolean>(true);
 
   // Gemini Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(MOCK_CHAT_MESSAGES);
@@ -123,7 +123,7 @@ export default function AnalysisView({
 
   const pipelineStages = [
     { label: "Video Ingestion", status: "complete", icon: "📥" },
-    { label: "Detection (YOLO)", status: "complete", icon: "🎯" },
+    { label: "Object Detection", status: "complete", icon: "🎯" },
     { label: "Tracking (ByteTrack)", status: "complete", icon: "🔄" },
     { label: "Event Extraction", status: "complete", icon: "⚡" },
     { label: "Camera Correlation", status: "complete", icon: "🔗" },
@@ -133,15 +133,25 @@ export default function AnalysisView({
 
   const cameras = investigation.cameras;
 
+  // Exact 5 priority events from prompt
+  const priorityEvents = [
+    { id: "evt-01", time: "10:42:11", label: "Person enters", cam: "CAM 01", camId: "cam-01", sec: 11, conf: 0.98, entity: "Person #01" },
+    { id: "evt-02", time: "10:42:16", label: "Person approaches vehicle", cam: "CAM 02", camId: "cam-02", sec: 16, conf: 0.95, entity: "Person #01" },
+    { id: "evt-03", time: "10:42:19", label: "Vehicle moves", cam: "CAM 03", camId: "cam-03", sec: 19, conf: 0.99, entity: "Vehicle #01" },
+    { id: "evt-04", time: "10:42:21", label: "Person falls", cam: "CAM 04", camId: "cam-04", sec: 21, conf: 0.94, entity: "Person #01 (FALLEN)" },
+    { id: "evt-05", time: "10:42:25", label: "Another person arrives", cam: "CAM 01", camId: "cam-01", sec: 25, conf: 0.97, entity: "Person #02" },
+  ];
+
   return (
-    <div className="flex flex-col h-[calc(100vh-60px)] overflow-hidden bg-neutral-950 text-neutral-200">
+    <div className="flex flex-col h-[calc(100vh-56px)] overflow-hidden bg-neutral-950 text-neutral-200">
       {/* ── 1. Pipeline Status Header Bar ── */}
-      <div className="px-6 py-2 border-b border-neutral-800/80 bg-neutral-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-            AI PIPELINE:
-          </span>
+      <div className="px-6 py-2 border-b border-neutral-800/80 bg-neutral-900/70 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            RECONSTRUCTION READY
+          </div>
+
           <div className="hidden lg:flex items-center gap-1 text-[11px] font-mono">
             {pipelineStages.map((st, i) => (
               <React.Fragment key={st.label}>
@@ -156,20 +166,67 @@ export default function AnalysisView({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-mono">
-          <span className="text-neutral-500">SYNCHRONIZED TIMECODE:</span>
-          <span className="px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold tracking-widest text-sm">
-            {formatTimecode(currentSec)} UTC
-          </span>
+        {/* Priority Flow Step Shortcuts */}
+        <div className="flex items-center gap-2 text-xs font-mono">
+          <button
+            onClick={() => setActiveSubTab("correlation")}
+            className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-all"
+          >
+            🔗 Correlation
+          </button>
+          <button
+            onClick={() => onNavigateTab("incidents")}
+            className="px-2.5 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 transition-all font-semibold"
+          >
+            🧠 AI Reconstruction →
+          </button>
+          <button
+            onClick={() => onNavigateTab("reports")}
+            className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-all"
+          >
+            📄 Report →
+          </button>
         </div>
       </div>
 
       {/* ── 2. Core Body: 4-Camera Grid & Left Controls (70%) + Gemini Copilot (30%) ── */}
       <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 overflow-hidden">
         {/* Left 8/12: 4-Feed Grid + Scrubber + Events */}
-        <div className="xl:col-span-8 flex flex-col border-r border-neutral-800 overflow-hidden">
+        <div className="xl:col-span-8 flex flex-col border-r border-neutral-800 overflow-hidden relative">
+          
+          {/* Multi-Camera Connection Overlay Banner */}
+          <div className="px-4 py-1.5 bg-neutral-900/90 border-b border-neutral-800 flex items-center justify-between text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400 font-bold">ONE CONTINUOUS INCIDENT:</span>
+              <span className="text-neutral-300 text-[11px] truncate">
+                Person #01 & Vehicle #01 tracked continuously across 4 distinct physical viewpoints.
+              </span>
+            </div>
+            <button
+              onClick={() => setShowCorrelationOverlay(!showCorrelationOverlay)}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all ${
+                showCorrelationOverlay
+                  ? "bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)]"
+                  : "bg-neutral-800 text-neutral-400 hover:text-white"
+              }`}
+            >
+              {showCorrelationOverlay ? "🔗 Correlation Links: ON" : "🔗 Links: OFF"}
+            </button>
+          </div>
+
           {/* 4 Camera Feeds in 2x2 Grid */}
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 p-3 bg-black overflow-y-auto">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 p-3 bg-black overflow-y-auto relative">
+            
+            {/* Visual Cross-Camera Connecting Indicators (When Correlation Overlay is ON) */}
+            {showCorrelationOverlay && (
+              <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                <div className="px-3 py-1.5 rounded-full bg-neutral-950/90 border border-amber-500/40 text-amber-400 font-mono text-[10px] shadow-2xl flex items-center gap-2 backdrop-blur-md">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  <span>SPATIAL RE-ID ACTIVE · PERSISTENT IDENTITIES ACROSS CAMERAS</span>
+                </div>
+              </div>
+            )}
+
             {cameras.map((cam) => {
               const detections = getDetectionsAtTime(cam.id, currentSec);
               const isFocused = activeCamId === cam.id;
@@ -180,14 +237,14 @@ export default function AnalysisView({
                   onClick={() => setActiveCamId(cam.id)}
                   className={`relative rounded-lg overflow-hidden border transition-all cursor-pointer flex flex-col bg-neutral-900 group ${
                     isFocused
-                      ? "border-amber-500 ring-1 ring-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                      ? "border-amber-500 ring-2 ring-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.25)]"
                       : "border-neutral-800 hover:border-neutral-700"
                   }`}
                   style={{ minHeight: "210px" }}
                 >
-                  {/* Camera Canvas / Silhouette Viewport */}
+                  {/* Camera Canvas Viewport */}
                   <div className="flex-1 relative bg-gradient-to-b from-neutral-950 to-neutral-900 overflow-hidden select-none">
-                    {/* Perspective lines representing real CCTV scene */}
+                    {/* Perspective grid */}
                     <div
                       className="absolute inset-0 opacity-20 pointer-events-none"
                       style={{
@@ -197,34 +254,34 @@ export default function AnalysisView({
                       }}
                     />
 
-                    {/* Camera Angle Environment Graphic Simulation */}
+                    {/* Camera Angle Environment Simulated Architecture */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
                       {cam.id === "cam-01" && (
                         <div className="w-full h-full flex items-end justify-start p-6">
-                          <div className="w-24 h-40 border-r-2 border-dashed border-neutral-600" />
-                          <div className="text-[10px] font-mono text-neutral-600 ml-2 mb-4">
-                            GATE ARCHWAY #01
+                          <div className="w-28 h-44 border-r-2 border-dashed border-neutral-600" />
+                          <div className="text-[10px] font-mono text-neutral-500 ml-2 mb-4">
+                            GATE ARCHWAY #01 · INGRESS SECTOR
                           </div>
                         </div>
                       )}
                       {cam.id === "cam-02" && (
                         <div className="w-full h-full flex items-center justify-end p-6">
-                          <div className="w-36 h-28 border border-neutral-700 rounded bg-neutral-950/40 flex items-center justify-center text-[10px] font-mono text-neutral-600">
-                            BAY 04 MARKING
+                          <div className="w-40 h-32 border border-neutral-700 rounded bg-neutral-950/40 flex items-center justify-center text-[10px] font-mono text-neutral-500">
+                            PARKING BAY 04 STALL
                           </div>
                         </div>
                       )}
                       {cam.id === "cam-03" && (
                         <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-full h-12 border-y border-dashed border-neutral-700 flex items-center justify-center text-[10px] font-mono text-neutral-600">
-                            EAST SERVICE ROAD
+                          <div className="w-full h-14 border-y border-dashed border-neutral-700 flex items-center justify-center text-[10px] font-mono text-neutral-500">
+                            EAST SERVICE ROADWAY · LATERAL VIEW
                           </div>
                         </div>
                       )}
                       {cam.id === "cam-04" && (
                         <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-48 h-48 rounded-full border border-neutral-800 flex items-center justify-center text-[9px] font-mono text-neutral-600">
-                            OVERHEAD AZIMUTH 240°
+                          <div className="w-52 h-52 rounded-full border border-neutral-800 flex items-center justify-center text-[9px] font-mono text-neutral-500">
+                            OVERHEAD AZIMUTH 240° · TOP-DOWN
                           </div>
                         </div>
                       )}
@@ -254,7 +311,7 @@ export default function AnalysisView({
                           className="absolute border-2 pointer-events-none rounded-sm"
                           style={{
                             borderColor: color,
-                            boxShadow: `0 0 10px ${color}33`,
+                            boxShadow: `0 0 12px ${color}44`,
                           }}
                         >
                           {/* Corner crosshairs */}
@@ -283,13 +340,18 @@ export default function AnalysisView({
 
                     {/* Top HUD: Camera Name & REC indicator */}
                     <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/70 backdrop-blur-md border border-neutral-800">
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/75 backdrop-blur-md border border-neutral-800">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
                         <span className="text-[10px] font-mono font-bold text-white">
                           {cam.label}
                         </span>
+                        {isFocused && (
+                          <span className="text-[8px] font-mono bg-amber-500 text-black px-1 rounded font-bold ml-1">
+                            PRIMARY
+                          </span>
+                        )}
                       </div>
-                      <div className="px-1.5 py-0.5 rounded bg-black/70 border border-neutral-800 text-[9px] font-mono text-neutral-400">
+                      <div className="px-1.5 py-0.5 rounded bg-black/75 border border-neutral-800 text-[9px] font-mono text-neutral-400">
                         {cam.fps} FPS · {cam.resolution.width}x{cam.resolution.height}
                       </div>
                     </div>
@@ -299,8 +361,10 @@ export default function AnalysisView({
                       <span className="bg-black/60 px-1.5 py-0.5 rounded">
                         {cam.location}
                       </span>
-                      <span className="bg-black/60 px-1.5 py-0.5 rounded text-amber-400">
-                        {detections.length} Entities Tracked
+                      <span className="bg-black/60 px-1.5 py-0.5 rounded text-amber-400 font-bold">
+                        {detections.length > 0
+                          ? detections.map((d) => d.label.split(" ")[0] + " " + d.label.split(" ")[1]).join(", ")
+                          : "No Target in View"}
                       </span>
                     </div>
                   </div>
@@ -310,12 +374,12 @@ export default function AnalysisView({
           </div>
 
           {/* ── Timeline Player Controls ── */}
-          <div className="p-3 border-t border-neutral-800 bg-neutral-900/80 space-y-2">
+          <div className="p-3 border-t border-neutral-800 bg-neutral-900/90 space-y-2">
             <div className="flex items-center gap-4">
               {/* Play / Pause */}
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className="w-9 h-9 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold flex items-center justify-center text-sm transition-all"
+                className="w-10 h-10 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold flex items-center justify-center text-sm transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)]"
               >
                 {isPlaying ? "⏸" : "▶"}
               </button>
@@ -339,7 +403,7 @@ export default function AnalysisView({
               </div>
 
               {/* Scrubber slider */}
-              <div className="flex-1 flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-3">
                 <span className="text-[11px] font-mono text-neutral-500">10:42:00</span>
                 <input
                   type="range"
@@ -351,9 +415,14 @@ export default function AnalysisView({
                     setCurrentSec(parseFloat(e.target.value));
                     setIsPlaying(false);
                   }}
-                  className="flex-1 accent-amber-500 cursor-pointer h-1.5 bg-neutral-800 rounded-lg appearance-none"
+                  className="flex-1 accent-amber-500 cursor-pointer h-2 bg-neutral-800 rounded-lg appearance-none"
                 />
                 <span className="text-[11px] font-mono text-neutral-500">10:42:30</span>
+              </div>
+
+              {/* Exact timecode indicator */}
+              <div className="px-2.5 py-1 rounded bg-neutral-950 border border-neutral-700 text-amber-400 font-mono text-xs font-bold tracking-wider">
+                {formatTimecode(currentSec)}
               </div>
 
               {/* Playback speed toggles */}
@@ -375,51 +444,66 @@ export default function AnalysisView({
             </div>
           </div>
 
-          {/* ── Sub-tabs: Event Timeline vs. Multi-Camera Correlation ── */}
-          <div className="border-t border-neutral-800 bg-neutral-950 flex flex-col h-44 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800/80 bg-neutral-900/40">
+          {/* ── Sub-tabs: Interactive Event Timeline vs. Multi-Camera Correlation vs Reconstruction Summary ── */}
+          <div className="border-t border-neutral-800 bg-neutral-950 flex flex-col h-48 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-800/80 bg-neutral-900/50">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setActiveSubTab("timeline")}
                   className={`text-xs font-mono px-3 py-1 rounded transition-all uppercase font-semibold ${
                     activeSubTab === "timeline"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/40"
                       : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
-                  Chronological Event Timeline (5 Events)
+                  ⚡ Event Timeline (Click to Seek)
                 </button>
                 <button
                   onClick={() => setActiveSubTab("correlation")}
                   className={`text-xs font-mono px-3 py-1 rounded transition-all uppercase font-semibold ${
                     activeSubTab === "correlation"
-                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/40"
                       : "text-neutral-400 hover:text-neutral-200"
                   }`}
                 >
-                  Multi-Camera Cross-Correlation (3 Links)
+                  🔗 Multi-Camera Correlation (One Incident)
+                </button>
+                <button
+                  onClick={() => setActiveSubTab("reconstruction")}
+                  className={`text-xs font-mono px-3 py-1 rounded transition-all uppercase font-semibold ${
+                    activeSubTab === "reconstruction"
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/40"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  🧠 Quick AI Reconstruction
                 </button>
               </div>
 
               <span className="text-[11px] font-mono text-neutral-500">
-                Click any event to seek all cameras
+                Synchronized across all 4 cameras
               </span>
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 no-scrollbar">
               {activeSubTab === "timeline" ? (
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                  {MOCK_EVENTS.map((evt) => {
+                  {priorityEvents.map((evt) => {
                     const isSelected = selectedEventId === evt.id;
-                    const isCritical = evt.severity === "critical";
+                    const isCritical = evt.label.includes("falls");
 
                     return (
                       <button
                         key={evt.id}
-                        onClick={() => handleSeekEvent(evt)}
+                        onClick={() => {
+                          setSelectedEventId(evt.id);
+                          setActiveCamId(evt.camId);
+                          setCurrentSec(evt.sec);
+                          setIsPlaying(false);
+                        }}
                         className={`p-2.5 rounded-lg border text-left transition-all relative overflow-hidden flex flex-col justify-between ${
                           isSelected
-                            ? "bg-amber-500/15 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                            ? "bg-amber-500/20 border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40"
                             : isCritical
                             ? "bg-red-500/10 border-red-500/40 hover:border-red-400"
                             : "bg-neutral-900/60 border-neutral-800 hover:border-neutral-700"
@@ -428,7 +512,7 @@ export default function AnalysisView({
                         <div>
                           <div className="flex items-center justify-between text-[10px] font-mono mb-1">
                             <span className="font-bold text-amber-400">
-                              {evt.timestamp}
+                              {evt.time}
                             </span>
                             <span
                               className={`px-1 rounded text-[8px] font-semibold uppercase ${
@@ -437,36 +521,36 @@ export default function AnalysisView({
                                   : "bg-neutral-800 text-neutral-300"
                               }`}
                             >
-                              {(evt.confidence * 100).toFixed(0)}% CONF
+                              {(evt.conf * 100).toFixed(0)}% CONF
                             </span>
                           </div>
                           <div className="text-xs font-bold text-white leading-tight mb-1">
-                            {evt.eventLabel}
+                            {evt.label}
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 mt-2">
-                          <span className="truncate">{evt.entityLabel}</span>
-                          <span className="text-amber-500/80">
-                            {evt.cameraId.toUpperCase()}
+                          <span className="truncate">{evt.entity}</span>
+                          <span className="text-amber-400 font-bold">
+                            {evt.cam}
                           </span>
                         </div>
                       </button>
                     );
                   })}
                 </div>
-              ) : (
+              ) : activeSubTab === "correlation" ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {MOCK_MULTI_CAM_LINKS.map((link) => (
                     <div
                       key={link.id}
-                      className="p-3 rounded-lg border border-neutral-800 bg-neutral-900/60 space-y-2 text-xs font-mono"
+                      className="p-3 rounded-lg border border-neutral-800 bg-neutral-900/70 space-y-2 text-xs font-mono"
                     >
                       <div className="flex items-center justify-between text-neutral-400">
                         <span className="text-amber-400 font-bold">
                           {link.sourceCamera.toUpperCase()} ↔ {link.targetCamera.toUpperCase()}
                         </span>
-                        <span className="text-emerald-400">
+                        <span className="text-emerald-400 font-bold">
                           Re-ID: {(link.reIdScore * 100).toFixed(1)}%
                         </span>
                       </div>
@@ -474,11 +558,33 @@ export default function AnalysisView({
                         {link.sharedEvent}
                       </div>
                       <div className="flex justify-between text-[10px] text-neutral-500 pt-1 border-t border-neutral-800">
-                        <span>Subject: {link.entityLabel}</span>
-                        <span>Gap: {link.timeGapSeconds}s</span>
+                        <span>Observed Subject: {link.entityLabel}</span>
+                        <span>Spatiotemporal Link: {link.timestamp}</span>
                       </div>
                     </div>
                   ))}
+                </div>
+              ) : (
+                /* Quick AI Reconstruction Overview */
+                <div className="p-3 rounded-xl bg-neutral-900/60 border border-neutral-800 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs">
+                  <div className="space-y-1 max-w-xl">
+                    <div className="text-amber-400 font-bold uppercase">
+                      Incident Type: Pedestrian-Vehicle Collision with Fall
+                    </div>
+                    <p className="text-neutral-300 font-sans italic">
+                      &ldquo;A person approached a parked vehicle. The vehicle subsequently moved, after which the person fell.&rdquo;
+                    </p>
+                    <div className="text-[11px] text-neutral-500">
+                      Overall Confidence: 94.2% · Cameras: CAM 01, 02, 03, 04 · Entities: Person #01, Vehicle #01, Person #02
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => onNavigateTab("incidents")}
+                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold font-mono text-xs uppercase tracking-wider transition-all flex items-center gap-2 flex-shrink-0"
+                  >
+                    Open Full Incident Dossier →
+                  </button>
                 </div>
               )}
             </div>
@@ -498,7 +604,7 @@ export default function AnalysisView({
                   Gemini Spatio-Temporal Investigator
                 </h4>
                 <div className="text-[10px] font-mono text-emerald-400">
-                  Strict Facts vs. Inference Grounding
+                  Observed Facts vs. AI Inference
                 </div>
               </div>
             </div>
@@ -507,20 +613,19 @@ export default function AnalysisView({
             </span>
           </div>
 
-          {/* Preset Question Quick-Chips */}
+          {/* Preset Question Quick-Chips (Strictly matching prompt) */}
           <div className="p-2.5 border-b border-neutral-800/80 bg-neutral-950/40 flex flex-wrap gap-1.5">
             {[
               "What happened?",
-              "Which cameras captured it?",
+              "Which cameras captured the incident?",
               "What happened before the fall?",
               "What evidence supports this?",
-              "Are there uncertainties?",
             ].map((q) => (
               <button
                 key={q}
                 onClick={() => handleSendChat(q)}
                 disabled={isAiLoading}
-                className="text-[11px] font-mono px-2.5 py-1 rounded bg-neutral-800 hover:bg-amber-500 hover:text-black text-neutral-300 border border-neutral-700 transition-all text-left"
+                className="text-[11px] font-mono px-2.5 py-1 rounded bg-neutral-800 hover:bg-amber-500 hover:text-black text-neutral-300 border border-neutral-700 transition-all text-left font-medium"
               >
                 {q}
               </button>
@@ -544,7 +649,7 @@ export default function AnalysisView({
                 <div
                   className={`p-3.5 rounded-xl border max-w-[95%] leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-amber-500/10 border-amber-500/30 text-amber-200"
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-200"
                       : "bg-neutral-950 border-neutral-800 text-neutral-200 shadow-md"
                   }`}
                 >
@@ -562,7 +667,7 @@ export default function AnalysisView({
                   {msg.evidenceRefs && msg.evidenceRefs.length > 0 && (
                     <div className="mt-3 pt-2 border-t border-neutral-800/80 space-y-1">
                       <div className="text-[10px] text-neutral-500 uppercase">
-                        Grounded Evidence References:
+                        Evidence Citations (Click to Seek Video):
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {msg.evidenceRefs.map((ref, idx) => (
@@ -587,7 +692,7 @@ export default function AnalysisView({
             {isAiLoading && (
               <div className="flex items-center gap-2 text-amber-400 text-xs p-2">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                <span>Correlating camera vectors & visual physics...</span>
+                <span>Grounding reasoning across 4 camera feeds...</span>
               </div>
             )}
             <div ref={chatEndRef} />
