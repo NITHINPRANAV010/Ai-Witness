@@ -165,3 +165,33 @@ export interface WSMessage {
   type: "pipeline_progress" | "new_event" | "ai_update" | "error" | "complete";
   payload: unknown;
 }
+
+export type AppTab =
+  | "dashboard"
+  | "investigations"
+  | "analysis"
+  | "incidents"
+  | "evidence"
+  | "reports"
+  | "settings";
+
+export interface MultiCameraLink {
+  id: string;
+  sourceCamera: string;
+  targetCamera: string;
+  entityId: string;
+  entityLabel: string;
+  reIdScore: number;
+  timeGapSeconds: number;
+  sharedEvent: string;
+  timestamp: string;
+}
+
+export interface CameraFrameDetection {
+  entityId: string;
+  label: string;
+  type: EntityType;
+  confidence: number;
+  bbox: BoundingBox;
+}
+
