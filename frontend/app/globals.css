@@ -1,0 +1,209 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+/* ─── Tailwind v4 Theme ────────────────────────────────────────────────────── */
+@theme {
+  /* Fonts */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', Menlo, monospace;
+
+  /* Colors — AI Witness Design System */
+  --color-void: #0B0D0F;
+  --color-surface: #121518;
+  --color-raised: #171B1F;
+  --color-border: #1E2328;
+  --color-border-subtle: #161A1E;
+
+  /* Text */
+  --color-text-primary: #E8E9EA;
+  --color-text-secondary: #9CA3AF;
+  --color-text-muted: #4B5563;
+
+  /* Amber — Signal / Events */
+  --color-amber: #F59E0B;
+  --color-amber-dim: #92610A;
+  --color-amber-glow: #FCD34D;
+  --color-amber-subtle: rgba(245, 158, 11, 0.12);
+
+  /* Cyan & Electric Blue — Investigation UI */
+  --color-cyan: #06B6D4;
+  --color-cyan-glow: #22D3EE;
+  --color-cyan-dim: #0E7490;
+  --color-cyan-subtle: rgba(6, 182, 212, 0.12);
+  --color-electric: #3B82F6;
+  --color-electric-glow: #60A5FA;
+  --color-electric-subtle: rgba(59, 130, 246, 0.12);
+  --color-navy-dark: #06090F;
+
+  /* Red — Critical only */
+  --color-critical: #EF4444;
+  --color-critical-dim: #7F1D1D;
+  --color-critical-subtle: rgba(239, 68, 68, 0.12);
+
+  /* Green — Confirmed/normal */
+  --color-confirmed: #10B981;
+  --color-confirmed-dim: #064E3B;
+  --color-confirmed-subtle: rgba(16, 185, 129, 0.12);
+
+  /* Info */
+  --color-info: #6366F1;
+  --color-info-subtle: rgba(99, 102, 241, 0.12);
+
+  /* Animations */
+  --animate-pulse-amber: pulse-amber 2s ease-in-out infinite;
+  --animate-pulse-cyan: pulse-cyan 2s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.4s ease-out;
+  --animate-blink: blink 1.2s step-end infinite;
+  --animate-scan: scan 3s linear infinite;
+}
+
+/* ─── Keyframes ──────────────────────────────────────────────────────────── */
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(400%); }
+}
+
+/* ─── Base Reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--color-void);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--color-void); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(245,158,11,0.3); }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Layout Utilities ───────────────────────────────────────────────────── */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.panel-raised {
+  background: var(--color-raised);
+  border: 1px solid var(--color-border);
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.timestamp {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.label-mono {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}
+
+/* ─── Camera Feed ────────────────────────────────────────────────────────── */
+.camera-feed {
+  position: relative;
+  background: #080A0C;
+  overflow: hidden;
+  aspect-ratio: 16/9;
+}
+
+.camera-scanline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ─── Grid Background ────────────────────────────────────────────────────── */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ─── Evidence Reference Chip ────────────────────────────────────────────── */
+.evidence-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.2);
+  color: #F59E0B;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-radius: 2px;
+}
+.evidence-chip:hover {
+  background: rgba(245,158,11,0.2);
+  border-color: rgba(245,158,11,0.4);
+}
+
+/* ─── AI Prose ───────────────────────────────────────────────────────────── */
+.ai-prose strong { color: var(--color-text-primary); font-weight: 600; }
+.ai-prose p { margin-bottom: 0.75rem; }
+.ai-prose ol, .ai-prose ul { padding-left: 1.25rem; }
+.ai-prose li { margin-bottom: 0.25rem; }
+
+/* ─── Severity ───────────────────────────────────────────────────────────── */
+.sev-normal { color: var(--color-confirmed); }
+.sev-warning { color: var(--color-amber); }
+.sev-critical { color: var(--color-critical); }
+
+.sev-dot-normal { background: var(--color-confirmed); }
+.sev-dot-warning { background: var(--color-amber); animation: pulse-amber 2s ease-in-out infinite; }
+.sev-dot-critical { background: var(--color-critical); animation: pulse 1s ease-in-out infinite; }
+
+/* ─── Selection ──────────────────────────────────────────────────────────── */
+::selection {
+  background: rgba(245,158,11,0.25);
+  color: var(--color-text-primary);
+}
